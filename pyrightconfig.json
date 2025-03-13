@@ -1,0 +1,21 @@
+{
+    "lsp": {
+        "pyright": {
+            "settings": {
+                "python.analysis": {
+                    "diagnosticMode": "workspace",
+                    "typeCheckingMode": "strict"
+                },
+                "python": {
+                    "pythonPath": "/home/alpha/micromamba/envs/cs-deep/bin/python"
+                }
+            }
+        }
+    },
+    "venv": {
+        "venvPath": "/home/alpha/micromamba/envs/",
+        "venv": "cs-deep",
+        "venvName": "cs-deep",
+        "venvType": "conda"
+    }
+}
