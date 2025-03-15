@@ -129,10 +129,6 @@ if __name__ == "__main__":
         checkpoint_dir=args.checkpoint_dir, resume=resume_phase1
     )
 
-    # Print final MAE values
-    print(f"Final training MAE: {ae_history['train_mae_values'][-1]:.6f}")
-    print(f"Final validation MAE: {ae_history['val_mae_values'][-1]:.6f}")
-
     # Save the trained model after self-supervised phase
     torch.save(model.state_dict(), 'results/self_supervised_model.pth')
 
