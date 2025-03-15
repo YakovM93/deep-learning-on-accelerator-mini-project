@@ -26,7 +26,7 @@ def get_args():
     parser.add_argument('--batch-size', default=128, type=int, help='Size of each batch')
     parser.add_argument('--latent-dim', default=128, type=int, help='encoding dimension')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str, help='Default device to use')
-    parser.add_argument('--mnist', action='store_true', default=True, help='Whether to use MNIST (True) or CIFAR10 (False) data')
+    parser.add_argument('--mnist', action='store_true', default=False, help='Whether to use MNIST (True) or CIFAR10 (False) data')
     parser.add_argument('--epochs', default=20, type=int, help='Number of training epochs')
     parser.add_argument('--val-split', default=0.1, type=float, help='Fraction of training data to use for validation')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
