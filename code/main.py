@@ -15,7 +15,9 @@ from models.model import(
 from utils import(
     plot_tsne,
     train_self_supervised,
-    train_classifier_with_frozen_encoder
+    train_classifier_with_frozen_encoder,
+    save_checkpoint,
+    load_checkpoint
 )
 
 NUM_CLASSES = 10
@@ -37,14 +39,10 @@ def get_args():
     parser.add_argument('--mnist', action='store_true', default=False, help='Whether to use MNIST (True) or CIFAR10 (False) data')
     parser.add_argument('--epochs', default=20, type=int, help='Number of training epochs')
     parser.add_argument('--val-split', default=0.1, type=float, help='Fraction of training data to use for validation')
-    parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
-
-    #add checkpoint support
-    parser.add_argument('--epochs', default=20, type=int, help='Number of training epochs')
-    parser.add_argument('--override-checkpoint', action='store_true', default=False,    help='Override checkpoint and start training from scratch')
+    parser.add_argument('--override-checkpoint', action='store_true', default=False, help='Override checkpoint and start training from scratch')
     parser.add_argument('--resume', action='store_true', default=False, help='Resume training from checkpoint')
     parser.add_argument('--checkpoint-dir', default='checkpoints', type=str, help='Directory to save checkpoints')
-
+    parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -102,13 +100,38 @@ if __name__ == "__main__":
         classifier_hidden_dims=[64]
     )
 
+    # Define checkpoint filenames
+    autoencoder_checkpoint = f"{args.checkpoint_dir}/autoencoder_checkpoint.pth"
+    classifier_checkpoint = f"{args.checkpoint_dir}/classifier_checkpoint.pth"
+    final_model_path = 'results/full_model.pth'
+
+    # Check if we should override existing checkpoints
+    if args.override_checkpoint:
+        if os.path.exists(autoencoder_checkpoint):
+            os.remove(autoencoder_checkpoint)
+        if os.path.exists(classifier_checkpoint):
+            os.remove(classifier_checkpoint)
+        print("Existing checkpoints removed, starting training from scratch.")
+        args.resume = False
+
     # Phase 1: Train autoencoder (self-supervised)
     print("\nPhase 1: Self-supervised autoencoder training")
     print("-" * 50)
+
+    # If there's a saved checkpoint and we want to resume, load it
+    resume_phase1 = args.resume and os.path.exists(autoencoder_checkpoint)
+    if resume_phase1:
+        print(f"Resuming autoencoder training from checkpoint: {autoencoder_checkpoint}")
+
     model, ae_history = train_self_supervised(
         model, train_loader, val_loader,
-        args.device, epochs=args.epochs, lr=args.lr
+        args.device, epochs=args.epochs, lr=args.lr,
+        checkpoint_dir=args.checkpoint_dir, resume=resume_phase1
     )
+
+    # Print final MAE values
+    print(f"Final training MAE: {ae_history['train_mae_values'][-1]:.6f}")
+    print(f"Final validation MAE: {ae_history['val_mae_values'][-1]:.6f}")
 
     # Save the trained model after self-supervised phase
     torch.save(model.state_dict(), 'results/self_supervised_model.pth')
@@ -120,13 +143,20 @@ if __name__ == "__main__":
     # Phase 2: Train classifier with frozen encoder
     print("\nPhase 2: Supervised classifier training with frozen encoder")
     print("-" * 50)
+
+    # If there's a saved checkpoint and we want to resume, load it
+    resume_phase2 = args.resume and os.path.exists(classifier_checkpoint)
+    if resume_phase2:
+        print(f"Resuming classifier training from checkpoint: {classifier_checkpoint}")
+
     model, clf_history = train_classifier_with_frozen_encoder(
         model, train_loader, val_loader,
-        args.device, epochs=args.epochs, lr=args.lr
+        args.device, epochs=args.epochs, lr=args.lr,
+        checkpoint_dir=args.checkpoint_dir, resume=resume_phase2
     )
 
     # Save the trained model after classifier phase
-    torch.save(model.state_dict(), 'results/full_model.pth')
+    torch.save(model.state_dict(), final_model_path)
 
     # Evaluate on test set
     print("\nEvaluating on test set...")
@@ -152,4 +182,5 @@ if __name__ == "__main__":
     print(f"Latent dimension: {args.latent_dim}")
     print(f"Final test accuracy: {test_accuracy:.2f}%")
     print(f"Results saved in 'results' directory")
+    print(f"Checkpoints saved in '{args.checkpoint_dir}' directory")
     print(f"{'='*50}\n")
