@@ -1,10 +1,18 @@
+#General
+*.png
+plots/
+References/
+checkpoints_*/*
+checkpoints_*/*/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 data/*
-
-#Pytorch Models 
+results/
+# Python Notebooks
+*.ipynb
+#Pytorch Models
 *.pth
 
 # C extensions
