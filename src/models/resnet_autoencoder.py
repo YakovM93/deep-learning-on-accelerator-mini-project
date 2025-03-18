@@ -50,7 +50,7 @@ class CustomResNetEncoder(nn.Module):
     An encoder built from scratch following a ResNet-style design.
     It processes an input image (N, C, H, W) and outputs a latent vector.
     Architecture:
-      - Stem: 7x7 conv with stride 2 and max pooling.
+      - Stem: 3x3 conv with stride 1 and max pooling.
       - Residual stage 1: one residual block, channels=64.
       - Residual stage 2: one residual block with downsampling, channels=128.
       - Residual stage 3: one residual block with downsampling, channels=256.
@@ -58,8 +58,8 @@ class CustomResNetEncoder(nn.Module):
     """
     def __init__(self, in_channels=3, latent_dim=128):
         super(CustomResNetEncoder, self).__init__()
-        self.stem_conv = nn.Conv2d(in_channels, 64, kernel_size=4,
-                                   stride=2, padding=1, bias=False)
+        self.stem_conv = nn.Conv2d(in_channels, 64, kernel_size=3,
+                                   stride=1, padding=1, bias=False)
         self.stem_bn   = nn.BatchNorm2d(64)
         self.stem_relu = nn.ReLU(inplace=True)
         self.stem_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)

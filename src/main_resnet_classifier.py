@@ -45,11 +45,13 @@ def get_args():
     parser.add_argument('--override-checkpoint', action='store_true', default=False, help='Override checkpoint and start training from scratch')
     parser.add_argument('--resume', action='store_true', default=False, help='Resume training from checkpoint')
     parser.add_argument('--checkpoint-dir', default='checkpoints_resnet', type=str, help='Directory to save checkpoints')
+
+    ## Architecture Parameters
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
+
     return parser.parse_args()
    # parser.add_argument('--early-stopping-patience', default=5, type=int,
    #                    help='Number of epochs with no improvement after which training will be stopped')
-
 def train_joint_encoder_classifier(model, train_loader, val_loader, device, epochs=20, lr=1e-3,
                                         checkpoint_dir='checkpoints', resume=False, checkpoint_freq=5,
                                         run_id=None, report_data=None):
