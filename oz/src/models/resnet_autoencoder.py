@@ -84,7 +84,7 @@ class CustomResNetEncoder(nn.Module):
         out = self.layer2(out)
         out = self.layer3(out)
 
-        out = self.avgpool(out)  # shape: (N, 256, 1, 1)
+        #out = self.avgpool(out)  # shape: (N, 256, 1, 1)
         out = torch.flatten(out, 1)  # shape: (N, 256)
         latent = self.fc(out)         # shape: (N, latent_dim)
         return latent
