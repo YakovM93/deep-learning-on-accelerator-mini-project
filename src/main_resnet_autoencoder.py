@@ -43,7 +43,7 @@ def get_args():
     return parser.parse_args()
 
 
-def train_self_supervised(model, train_loader, val_loader, device, epochs=20, lr=1e-3,
+def train_self_supervised(model, train_loader, val_loader, device, epochs=50, lr=1e-3,
                           checkpoint_dir='checkpoints', resume=False, checkpoint_freq=5):
     """
     Train the ResNet-based model using self-supervised reconstruction loss with checkpointing.

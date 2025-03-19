@@ -58,8 +58,8 @@ class CustomResNetEncoder(nn.Module):
     """
     def __init__(self, in_channels=3, latent_dim=128):
         super(CustomResNetEncoder, self).__init__()
-        self.stem_conv = nn.Conv2d(in_channels, 64, kernel_size=3,
-                                   stride=1, padding=1, bias=False)
+        self.stem_conv = nn.Conv2d(in_channels, 64, kernel_size=4,
+                                   stride=2, padding=1, bias=False)
         self.stem_bn   = nn.BatchNorm2d(64)
         self.stem_relu = nn.ReLU(inplace=True)
         self.stem_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -84,9 +84,9 @@ class CustomResNetEncoder(nn.Module):
         out = self.layer2(out)
         out = self.layer3(out)
 
-        #out = self.avgpool(out)  # shape: (N, 256, 1, 1)
-        out = torch.flatten(out, 1)  # shape: (N, 256)
-        latent = self.fc(out)         # shape: (N, latent_dim)
+        out = self.avgpool(out)        # shape: (N, 256, 1, 1)
+        out = torch.flatten(out, 1)     # shape: (N, 256)
+        latent = self.fc(out)           # shape: (N, latent_dim)
         return latent
 
 class MirrorResNetDecoder(nn.Module):
