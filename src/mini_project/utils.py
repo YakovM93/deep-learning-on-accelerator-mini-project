@@ -1,4 +1,5 @@
 import torch
+import os
 import numpy as np
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
@@ -40,6 +41,7 @@ def plot_tsne(encode_fn, dataloader, device,
     plt.title('t-SNE of Latent Space')
     plt.grid(True)
     plt.savefig(latent_tsne_path)
+    print(f"Saved t-SNE visualization to {os.path.abspath(latent_tsne_path)}")
     plt.close()
 
     # t-SNE on images (flattened)
@@ -53,4 +55,5 @@ def plot_tsne(encode_fn, dataloader, device,
     plt.title('t-SNE of Image Space')
     plt.grid(True)
     plt.savefig(image_tsne_path)
+    print(f"Saved t-SNE visualization to {os.path.abspath(image_tsne_path)}")
     plt.close()

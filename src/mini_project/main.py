@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
+import os
 
 import numpy as np
 import random
@@ -25,21 +26,31 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=0, type=int, help='Seed for reproducibility')
     parser.add_argument('--data-path', default="./data", type=str, help='Path to dataset')
+    parser.add_argument('--save-path', default='./trained-models', type=str, help='Path to save the trained models')
     parser.add_argument('--batch-size', default=32, type=int, help='Batch size')
     parser.add_argument('--latent-dim', default=128, type=int, help='Latent dimension')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
     parser.add_argument('--epochs-ae', default=35, type=int, help='Number of epochs for autoencoder pretraining')
-    parser.add_argument('--epochs-clf', default=170, type=int, help='Number of epochs for classifier training (self-supervised mode)')
+    parser.add_argument('--epochs-clf', default=15, type=int, help='Number of epochs for classifier training (self-supervised mode)')
     parser.add_argument('--epochs-cg', default=20, type=int, help='Number of epochs for classification guided training')
     parser.add_argument('--mnist', action='store_true', default=False, help='Use MNIST if True, else CIFAR10')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str)
-    parser.add_argument('--mode', default='self_supervised', choices=['self_supervised', 'classification_guided'],
+    parser.add_argument('--mode', default='self_supervised', choices=['self_supervised', 'classification_guided', 'evaluation_ae', 'evaluation_clf'],
                         help='Training mode: self_supervised (1.2.1) or classification_guided (1.2.2)')
+    parser.add_argument('--pretrained_model', default=None, type=str, help='Path to pretrained model')
     # Optionally add a flag to switch optimizers or schedulers
     parser.add_argument('--optimizer', default='adamw', type=str, help='Optimizer: adam / adamw / sgd / rmsprop')
     return parser.parse_args()
 
+# def reconstruction_loss(x_recon, x):
+#     return nn.functional.l1_loss(x_recon, x)
+
 def reconstruction_loss(x_recon, x):
+    # Ensure both tensors have the same shape before computing loss
+    if x_recon.shape != x.shape:
+        # For MNIST, you might need to adjust the output shape
+        # If x_recon has a different number of channels, reshape it to match x
+        x_recon = x_recon.view(x.shape)
     return nn.functional.l1_loss(x_recon, x)
 
 def train_autoencoder(model, dataloader, optimizer, device, scheduler=None):
@@ -140,60 +151,154 @@ def evaluate_classification_guided(model, dataloader, device):
     avg_acc = total_correct / len(dataloader.dataset)
     return avg_loss, avg_acc
 
-def visualize_reconstructions(model, dataloader, device, n_images=5):
+def visualize_reconstructions(model, test_loader, device, num_examples=10):
+    """
+    Visualize original images and their reconstructions.
+
+    Args:
+        model: LatentModel
+        test_loader: DataLoader for test data
+        device: Device to use ('cuda' or 'cpu')
+        num_examples: Number of examples to visualize
+    """
     model.eval()
-    images, _ = next(iter(dataloader))
-    images = images[:n_images].to(device)
+
+    # Get some test examples
+    dataiter = iter(test_loader)
+    images, labels = next(dataiter)
+    images = images[:num_examples].to(device)
+
+    # Get reconstructions
     with torch.no_grad():
-        recon = model(images)
+        reconstructed = model(images)
+
+    # Convert to numpy for plotting
     images = images.cpu().numpy()
-    recon = recon.cpu().numpy()
-    fig, axes = plt.subplots(2, n_images, figsize=(3*n_images, 6))
-    for i in range(n_images):
-        if images.shape[1] == 1:  # grayscale
-            axes[0, i].imshow(images[i].squeeze(), cmap="gray")
-            axes[1, i].imshow(recon[i].squeeze(), cmap="gray")
-        else:
-            axes[0, i].imshow(np.transpose(images[i], (1,2,0)))
-            axes[1, i].imshow(np.transpose(recon[i], (1,2,0)))
-        axes[0, i].set_title("Original")
-        axes[1, i].set_title("Reconstruction")
-        axes[0, i].axis("off")
-        axes[1, i].axis("off")
+
+    # Reshape reconstructed images
+    if len(images.shape) > 2:
+        # For image datasets like MNIST or CIFAR
+        reconstructed = reconstructed.view(images.shape).cpu().numpy()
+    else:
+        # For flat data
+        reconstructed = reconstructed.cpu().numpy().reshape(images.shape)
+
+    # Plot original and reconstructed images
+    plt.figure(figsize=(20, 4))
+    for i in range(num_examples):
+        # Original
+        ax = plt.subplot(2, num_examples, i + 1)
+        if images.shape[1] == 1:  # Grayscale (e.g., MNIST)
+            plt.imshow(images[i][0], cmap='gray')
+        else:  # RGB (e.g., CIFAR)
+            plt.imshow(np.transpose(images[i], (1, 2, 0)))
+        plt.title(f"Original: {labels[i]}")
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # Reconstructed
+        ax = plt.subplot(2, num_examples, num_examples + i + 1)
+        if images.shape[1] == 1:  # Grayscale
+            plt.imshow(reconstructed[i][0], cmap='gray')
+        else:  # RGB
+            plt.imshow(np.transpose(reconstructed[i], (1, 2, 0)))
+        plt.title(f"Reconstructed")
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+    plt.suptitle('Autoencoder Reconstructions', fontsize=16)
     plt.tight_layout()
+    plt.savefig('reconstructions.png')
+    print(f"Saved reconstruction visualization to {os.path.abspath('reconstructions.png')}")
+    plt.close()
+
+def linear_interpolation(model, dataloader, device, steps=10, n_image_pairs=1, save_path=None):
+    """
+    Perform linear interpolation between pairs of images in the latent space.
+
+    Args:
+        model: The autoencoder model
+        dataloader: DataLoader containing images
+        device: Device to use (cuda or cpu)
+        steps: Number of interpolation steps between images
+        n_image_pairs: Number of image pairs to interpolate
+        save_path: Path to save the visualization (if None, will show the plot)
+    """
+    print("starting linear interpolation")
+    model.eval()
+    images, labels = next(iter(dataloader))
+
+    if len(images) < 2*n_image_pairs:
+        print(f"Not enough images for {n_image_pairs} pairs. Need at least {2*n_image_pairs} images.")
+        return
+
+    fig, all_axes = plt.subplots(n_image_pairs, steps+2, figsize=(3*(steps+2), 3*n_image_pairs))
+
+    for pair_idx in range(n_image_pairs):
+        # Get two images
+        idx1, idx2 = pair_idx*2, pair_idx*2+1
+        img1 = images[idx1].unsqueeze(0).to(device)
+        img2 = images[idx2].unsqueeze(0).to(device)
+        label1, label2 = labels[idx1].item(), labels[idx2].item()
+
+        with torch.no_grad():
+            z1 = model.encode(img1)
+            z2 = model.encode(img2)
+
+        # Create interpolation steps
+        alphas = np.linspace(0, 1, steps)
+        interpolated_images = []
+
+        for alpha in alphas:
+            z_interp = (1 - alpha) * z1 + alpha * z2
+            with torch.no_grad():
+                x_interp = model.decode(z_interp)
+            interpolated_images.append(x_interp.squeeze(0).cpu())
+
+        # Get axes for this pair
+        if n_image_pairs == 1:
+            axes = all_axes
+        else:
+            axes = all_axes[pair_idx]
+
+        # Plot the original images at the beginning and end
+        img1_np = img1.squeeze(0).cpu()
+        img2_np = img2.squeeze(0).cpu()
+
+        if img1_np.shape[0] == 1:  # Grayscale
+            axes[0].imshow(img1_np.squeeze(), cmap="gray")
+            axes[-1].imshow(img2_np.squeeze(), cmap="gray")
+        else:  # RGB
+            axes[0].imshow(np.transpose(img1_np, (1, 2, 0)))
+            axes[-1].imshow(np.transpose(img2_np, (1, 2, 0)))
+
+        axes[0].set_title(f"Original\nClass: {label1}")
+        axes[-1].set_title(f"Original\nClass: {label2}")
+        axes[0].axis("off")
+        axes[-1].axis("off")
+
+        # Plot the interpolated images
+        for i, img in enumerate(interpolated_images):
+            if img.shape[0] == 1:  # Grayscale
+                axes[i+1].imshow(img.squeeze(), cmap="gray")
+            else:  # RGB
+                axes[i+1].imshow(np.transpose(img, (1, 2, 0)))
+            axes[i+1].set_title(f"α={alphas[i]:.2f}")
+            axes[i+1].axis("off")
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Saved reconstruction visualization to {os.path.abspath(save_path)}")
     plt.show()
 
-def linear_interpolation(model, dataloader, device, steps=10):
-    model.eval()
-    images, _ = next(iter(dataloader))
-    if images.size(0) < 2:
-        print("Not enough images for interpolation.")
-        return
-    img1 = images[0].unsqueeze(0).to(device)
-    img2 = images[1].unsqueeze(0).to(device)
-    with torch.no_grad():
-        z1 = model.encode(img1)
-        z2 = model.encode(img2)
-    alphas = np.linspace(0, 1, steps)
-    interpolated = []
-    for alpha in alphas:
-        z_interp = (1 - alpha) * z1 + alpha * z2
-        with torch.no_grad():
-            x_interp = model.decode(z_interp)
-        interpolated.append(x_interp.squeeze(0).cpu().numpy())
-    fig, axes = plt.subplots(1, steps, figsize=(3*steps, 3))
-    for i, img in enumerate(interpolated):
-        if img.shape[0] == 1:
-            axes[i].imshow(img.squeeze(), cmap="gray")
-        else:
-            axes[i].imshow(np.transpose(img, (1,2,0)))
-        axes[i].set_title(f"alpha={alphas[i]:.2f}")
-        axes[i].axis("off")
-    plt.tight_layout()
-    plt.show()
+
 
 def main():
     args = get_args()
+    #debug
+    if args.mnist:
+        print("MNIST")
     device = args.device
     freeze_seeds(args.seed)
 
@@ -265,6 +370,11 @@ def main():
         test_mae = evaluate_autoencoder(autoencoder, test_loader, device)
         print(f"Test Reconstruction MAE: {test_mae:.4f}")
 
+        # Save the trained autoencoder model
+
+        autoencoder.save_model(f"{args.save_path}/autoencoder.pth")
+
+
         # Train Classifier on Frozen Encoder
         for param in autoencoder.parameters():
             param.requires_grad = False
@@ -280,9 +390,12 @@ def main():
         test_clf_loss, test_clf_acc = evaluate_classifier(autoencoder, classifier, test_loader, device)
         print(f"Test Classifier Loss={test_clf_loss:.4f}, Test Accuracy={test_clf_acc*100:.2f}%")
 
+        # Save the trained classifier model
+        classifier.save_model(f"{args.save_path}/classifier.pth")
+
         # Qualitative Evaluations
         print("Visualizing Reconstructions...")
-        visualize_reconstructions(autoencoder, test_loader, device, n_images=5)
+        visualize_reconstructions(autoencoder, test_loader, device)
         print("Performing Linear Interpolation on two images...")
         linear_interpolation(autoencoder, test_loader, device, steps=10)
 
@@ -306,11 +419,31 @@ def main():
         test_loss, test_acc = evaluate_classification_guided(model_cg, test_loader, device)
         print(f"Test Loss={test_loss:.4f}, Test Accuracy={test_acc*100:.2f}%")
 
+        # Save the trained classification-guided model
+        model_cg.save_model(f"{args.save_path}/classification_guided_model.pth")
+
         # t-SNE for Classification-Guided Model using its encoder
         def encode_fn(x):
             return model_cg.encode(x)
         print("Generating t-SNE plots for Classification-Guided Model...")
         plot_tsne(encode_fn, test_loader, device, image_tsne_path='tsne_img_cg.png', latent_tsne_path='tsne_latent_cg.png')
+    elif args.mode == 'evaluation_ae':
+        if not args.pretrained_model:
+            raise ValueError("Pretrained model path is required for evaluation.")
+        pth = torch.load(args.pretrained_model)
+        if args.mnist:
+            autoencoder = ConvAutoencoderMNIST(latent_dim=args.latent_dim).to(device)
+        else:
+            autoencoder = ConvAutoencoderCIFAR(latent_dim=args.latent_dim).to(device)
+        autoencoder.load_state_dict(pth)
+        # Qualitative Evaluations
+        print("Visualizing Reconstructions...")
+        visualize_reconstructions(autoencoder, test_loader, device)
+        print("Performing Linear Interpolation on two images...")
+        linear_interpolation(autoencoder, test_loader, device, steps=10)
+
+        # print("Generating t-SNE plots for Self-Supervised Model...")
+        # plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path='tsne_img_selfsup.png', latent_tsne_path='tsne_latent_selfsup.png')
 
 if __name__ == "__main__":
     main()
