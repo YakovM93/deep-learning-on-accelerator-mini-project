@@ -1,0 +1,230 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class ConvAutoencoderMNIST(nn.Module):
+    def __init__(self, latent_dim=128):
+        super().__init__()
+        self.latent_dim = latent_dim
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(True),
+
+            # Added Extra Conv Layer
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),
+
+            nn.Flatten(),
+            # Compute the in_features needed here:
+            # After 3 conv layers, shape is [batch_size, 64, 4, 4] for 28x28 -> check carefully:
+            # Actually for MNIST (28x28), let's see final shape after above conv:
+            # 1st conv: 28x28 -> 14x14
+            # 2nd conv: 14x14 -> 7x7
+            # 3rd conv: 7x7 -> 4x4 (approx)
+            # So 64 channels * 4x4 = 1024
+            nn.Linear(64 * 4 * 4, latent_dim)
+        )
+        # Decoder
+        self.decoder_input = nn.Linear(latent_dim, 64 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.1, inplace=True),
+
+            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(0.1, inplace=True),
+
+            # Now we need an extra up-conv for symmetry, or you can just carefully handle final shape
+            nn.ConvTranspose2d(16, 1, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.Sigmoid()
+        )
+        self.dropout = nn.Dropout(p=0.2)  # optional dropout
+
+    def encode(self, x):
+        return self.encoder(x)
+
+    def decode(self, z):
+        x = self.decoder_input(z)
+        x = x.view(-1, 64, 4, 4)
+        x = self.dropout(x)  # dropout in the decoder, if desired
+        x = self.decoder(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        return self.decode(z)
+
+
+class ConvAutoencoderCIFAR(nn.Module):
+    def __init__(self, latent_dim=128):
+        super().__init__()
+        self.latent_dim = latent_dim
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(32),
+            nn.RReLU(0.05, 0.2, inplace=True),
+
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.RReLU(0.05, 0.2, inplace=True),
+
+            # Added Extra Conv Layer
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.RReLU(0.05, 0.2, inplace=True),
+
+            nn.Flatten(),
+            # shape after 3 conv layers for CIFAR (32x32):
+            # 1st conv -> 16x16, 2nd -> 8x8, 3rd -> 4x4 with 128 channels
+            # so 128 * 4 * 4 = 2048
+            nn.Linear(128 * 4 * 4, latent_dim)
+        )
+        # Decoder
+        self.decoder_input = nn.Linear(latent_dim, 128 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.RReLU(0.05, 0.2, inplace=True),
+
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(32),
+            nn.RReLU(0.05, 0.2, inplace=True),
+
+            # For symmetry with the new encoder:
+            nn.ConvTranspose2d(32, 3, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid()
+        )
+        self.dropout = nn.Dropout(p=0.2)  # optional dropout
+
+    def encode(self, x):
+        return self.encoder(x)
+
+    def decode(self, z):
+        x = self.decoder_input(z)
+        x = x.view(-1, 128, 4, 4)
+        x = self.dropout(x)  # dropout
+        x = self.decoder(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        return self.decode(z)
+
+
+# --- Classifier with extra Conv layer & BN/Dropout ---
+class LatentClassifier(nn.Module):
+    def __init__(self, latent_dim=128, num_classes=10):
+        super(LatentClassifier, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(latent_dim, 1024),
+            nn.BatchNorm1d(1024),
+            nn.RReLU(0.07, 0.2, inplace=True),
+            nn.Dropout(p=0.4)
+            nn.Linear(1024, 128),
+            nn.BatchNorm1d(128),
+            nn.RReLU(0.07, 0.2, inplace=True),
+            nn.Dropout(p=0.4),
+            nn.Linear(128, num_classes)
+        )
+
+    def forward(self, z):
+        return self.fc(z)
+
+
+
+# Classification-Guided Models with an extra Conv layer:
+class ConvEncoderClassifierMNIST(nn.Module):
+    def __init__(self, latent_dim=128, num_classes=10):
+        super().__init__()
+        self.latent_dim = latent_dim
+        # We'll add an initial conv-based feature extractor in the classifier:
+        self.initial_conv = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+            # -> shape ~ (16, 14, 14)
+        )
+        # Then our encoder is simpler, or we can keep it the same style:
+        self.encoder = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(True),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),
+            nn.Flatten(),
+            # shape after that ~ (64, 3, 3) => 64*3*3 = 576, adapt if needed
+            nn.Linear(576, latent_dim)
+        )
+
+        self.dropout = nn.Dropout(p=0.3)
+        self.classifier = nn.Sequential(
+            nn.BatchNorm1d(latent_dim),
+            nn.ReLU(True),
+            nn.Linear(latent_dim, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.initial_conv(x)
+        z = self.encoder(x)
+        z = self.dropout(z)
+        logits = self.classifier(z)
+        return logits
+
+    def encode(self, x):
+        x = self.initial_conv(x)
+        z = self.encoder(x)
+        return z
+
+
+class ConvEncoderClassifierCIFAR(nn.Module):
+    def __init__(self, latent_dim=128, num_classes=10):
+        super().__init__()
+        self.latent_dim = latent_dim
+        # Extra conv at the start
+        self.initial_conv = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.RReLU(0.05, 0.2, inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+            # -> shape ~ (32, 16, 16)
+        )
+        self.encoder = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.RReLU(0.05, 0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.RReLU(0.05, 0.2, inplace=True),
+            nn.Flatten(),
+            # shape after that -> (128, 4, 4) => 128*4*4 = 2048
+            nn.Linear(128*4*4, latent_dim)
+        )
+        self.dropout = nn.Dropout(p=0.3)
+        self.classifier = nn.Sequential(
+            nn.BatchNorm1d(latent_dim),
+            nn.RReLU(0.05, 0.2, inplace=True),
+            nn.Linear(latent_dim, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.initial_conv(x)
+        z = self.encoder(x)
+        z = self.dropout(z)
+        logits = self.classifier(z)
+        return logits
+
+    def encode(self, x):
+        x = self.initial_conv(x)
+        z = self.encoder(x)
+        return z
