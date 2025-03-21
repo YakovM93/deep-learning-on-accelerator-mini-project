@@ -11,7 +11,7 @@ import argparse
 import matplotlib.pyplot as plt
 
 # Models from models.py
-from models.model import (
+from models import (
     ConvAutoencoderMNIST, ConvAutoencoderCIFAR,
     ConvEncoderClassifierMNIST,ConvEncoderClassifierCIFAR,
     LatentClassifier)
@@ -36,7 +36,7 @@ def get_args():
     parser.add_argument('--epochs-cg', default=20, type=int, help='Number of epochs for classification guided training')
     parser.add_argument('--mnist', action='store_true', default=False, help='Use MNIST if True, else CIFAR10')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str)
-    parser.add_argument('--mode', default='self_supervised', choices=['self_supervised', 'classification_guided', 'evaluation_ae', 'evaluation_clf'],
+    parser.add_argument('--mode', default='self_supervised', choices=['self_supervised', 'classification_guided'],
                         help='Training mode: self_supervised (1.2.1) or classification_guided (1.2.2)')
     parser.add_argument('--pretrained_model', default=None, type=str, help='Path to pretrained model')
     # Optionally add a flag to switch optimizers or schedulers
@@ -246,9 +246,6 @@ def main():
         plt.title('Training and Validation Loss Over Time')
         plt.legend()
         plt.grid(True)
-        # DEBUG Add this line to check if data is present
-        print(f"Training losses: {train_losses}")
-        print(f"Validation losses: {val_losses}")
 
         plt.savefig(f"{args.save_path}/training_curves.png")
         print(f"saved losstraining curves of autoencoder (Phase 1) to {os.path.abspath(args.save_path)}/training_curves.png")
@@ -256,6 +253,10 @@ def main():
 
         test_mae = evaluate_autoencoder(autoencoder, test_loader, device)
         print(f"Test Reconstruction MAE: {test_mae:.4f}")
+
+        # Write test results to file
+        with open(f"{args.save_path}/test_results.txt", "w") as f:
+            f.write(f"Test Reconstruction MAE: {test_mae:.4f}\n")
 
         # Save the trained autoencoder model
         autoencoder.save_model(f"{args.save_path}/autoencoder.pth")
@@ -317,17 +318,22 @@ def main():
         test_clf_loss, test_clf_acc = evaluate_classifier(autoencoder, classifier, test_loader, device)
         print(f"Test Classifier Loss={test_clf_loss:.4f}, Test Accuracy={test_clf_acc*100:.2f}%")
 
+        # Write test classifier results to file
+        with open(f"{args.save_path}/test_results.txt", "a") as f:
+            f.write(f"Test Classifier Loss: {test_clf_loss:.4f}\n")
+            f.write(f"Test Classifier Accuracy: {test_clf_acc*100:.2f}%\n")
+
         # Save the trained classifier model
         classifier.save_model(f"{args.save_path}/classifier.pth")
 
         # Qualitative Evaluations
         print("Visualizing Reconstructions...")
-        visualize_reconstructions(autoencoder, test_loader, device)
+        visualize_reconstructions(autoencoder, test_loader, device , save_path=f"{args.save_path}/reconstructions.png")
         print("Performing Linear Interpolation on two images...")
         linear_interpolation(autoencoder, test_loader, device, steps=10, n_image_pairs=1, save_path=f"{args.save_path}/interpolation.png")
 
         print("Generating t-SNE plots for Self-Supervised Model...")
-        plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path='tsne_img_selfsup.png', latent_tsne_path='tsne_latent_selfsup.png')
+        plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path=f"{args.save_path}/tsne_img_selfsup.png", latent_tsne_path=f"{args.save_path}/tsne_latent_selfsup.png")
 
     elif args.mode == 'classification_guided':
         # Classification-Guided Training (1.2.2)
@@ -382,6 +388,11 @@ def main():
         test_loss, test_acc = evaluate_classification_guided(model_cg, test_loader, device)
         print(f"Test Loss={test_loss:.4f}, Test Accuracy={test_acc*100:.2f}%")
 
+        # Write test results to file
+        with open(f"{args.save_path}/test_results.txt", "w") as f:
+            f.write(f"Test Loss: {test_loss:.4f}\n")
+            f.write(f"Test Accuracy: {test_acc*100:.2f}%\n")
+
         # Save the trained classification-guided model
         model_cg.save_model(f"{args.save_path}/classification_guided_model.pth")
 
@@ -389,26 +400,8 @@ def main():
         def encode_fn(x):
             return model_cg.encode(x)
         print("Generating t-SNE plots for Classification-Guided Model...")
-        plot_tsne(encode_fn, test_loader, device, image_tsne_path='tsne_img_cg.png', latent_tsne_path='tsne_latent_cg.png')
+        plot_tsne(encode_fn, test_loader, device, image_tsne_path=f"{args.save_path}/tsne_img_cg.png", latent_tsne_path=f"{args.save_path}/tsne_latent_cg.png")
 
-    ## Evaluation only (No Training)
-    elif args.mode == 'evaluation_ae':
-        if not args.pretrained_model:
-            raise ValueError("Pretrained model path is required for evaluation.")
-        pth = torch.load(args.pretrained_model)
-        if args.mnist:
-            autoencoder = ConvAutoencoderMNIST(latent_dim=args.latent_dim).to(device)
-        else:
-            autoencoder = ConvAutoencoderCIFAR(latent_dim=args.latent_dim).to(device)
-        autoencoder.load_state_dict(pth)
-        # Qualitative Evaluations
-        print("Visualizing Reconstructions...")
-        visualize_reconstructions(autoencoder, test_loader, device)
-        print("Performing Linear Interpolation on two images...")
-        linear_interpolation(autoencoder, test_loader, device, steps=10, n_image_pairs=1, save_path=f"{args.save_path}/interpolation.png")
-
-        # print("Generating t-SNE plots for Self-Supervised Model...")
-        # plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path='tsne_img_selfsup.png', latent_tsne_path='tsne_latent_selfsup.png')
 
 if __name__ == "__main__":
     main()

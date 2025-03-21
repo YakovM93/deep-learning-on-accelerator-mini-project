@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 def plot_tsne(encode_fn, dataloader, device,
               image_tsne_path='image_tsne.png',
               latent_tsne_path='latent_tsne.png'):
+
     """
     encode_fn - A function that takes in a batch of images and returns
                 their latent embeddings (for example: autoencoder.encode).
@@ -62,7 +63,7 @@ def plot_tsne(encode_fn, dataloader, device,
     print(f"Saved t-SNE visualization to {os.path.abspath(image_tsne_path)}")
     plt.close()
 
-def visualize_reconstructions(model, test_loader, device, num_examples=10):
+def visualize_reconstructions(model, test_loader, device, num_examples=10,save_path='reconstructions.png'):
     """
     Visualize original images and their reconstructions.
 
@@ -71,6 +72,7 @@ def visualize_reconstructions(model, test_loader, device, num_examples=10):
         test_loader: DataLoader for test data
         device: Device to use ('cuda' or 'cpu')
         num_examples: Number of examples to visualize
+        save_path: Path to save the visualization
     """
     model.eval()
 
@@ -119,8 +121,8 @@ def visualize_reconstructions(model, test_loader, device, num_examples=10):
 
     plt.suptitle('Autoencoder Reconstructions', fontsize=16)
     plt.tight_layout()
-    plt.savefig('reconstructions.png')
-    print(f"Saved reconstruction visualization to {os.path.abspath('reconstructions.png')}")
+    plt.savefig(save_path)
+    print(f"Saved reconstruction visualization to {os.path.abspath(save_path)}")
     plt.close()
 
 def linear_interpolation(model, dataloader, device, steps, n_image_pairs, save_path):

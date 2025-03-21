@@ -4,6 +4,7 @@ Task 1.2.3 Contrastive Learning:
 """
 import torch
 import torch.nn as nn
+import os
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
@@ -13,7 +14,7 @@ import random
 import argparse
 import matplotlib.pyplot as plt
 
-from models.contrastive_model import (
+from models import (
     ContrastiveEncoderCIFAR , ContrastiveEncoderMNIST, LatentClassifier
 )
 # Import utility functions from utils.py
@@ -61,6 +62,7 @@ def get_args():
     parser.add_argument('--epochs-clf', default=180, type=int, help='Number of epochs for classifier training')
     parser.add_argument('--epochs-contrastive', default=2, type=int, help='Number of epochs for contrastive training')
     parser.add_argument('--mnist', action='store_true', default=True, help='Use MNIST if True, else CIFAR10')
+    parser.add_argument('--save-path', default='./trained-models/', type=str, help='Path to save the trained models')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str)
     parser.add_argument('--optimizer', default='adamw', type=str, help='Optimizer: adam / adamw / sgd / rmsprop')
     # If you want backward compatibility with old command line
@@ -296,7 +298,8 @@ def main():
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('contrastive_learning_losses_curves.png')
+        plt.savefig(f'{args.save_path}/contrastive_learning_losses_curves.png')
+        print(f"saved Contrastive Learning Losses Curves in {os.path.abspath(f'{args.save_path}/contrastive_learning_losses_curves.png')}")
         plt.close()
 
 
@@ -319,6 +322,9 @@ def main():
 
     avg_test_loss = total_test_loss / len(test_loader.dataset)
     print(f"Test Contrastive Loss: {avg_test_loss:.4f}")
+    # Write test results to file
+    with open(f'{args.save_path}/contrastive_test_results.txt', 'w') as f:
+        f.write(f"Test Contrastive Loss: {avg_test_loss:.4f}\n")
 
     # Create new standard data loaders for classifier training
     print("Creating new standard data loaders for classifier training...")
@@ -392,16 +398,21 @@ def main():
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('contastive_learing_classifier_training_curves.png')
+        plt.savefig(f'{args.save_path}/contastive_learing_classifier_training_curves.png')
+        print(f"saved Contrastive Learning Classifier Training Curves in {os.path.abspath(f'{args.save_path}/contastive_learing_classifier_training_curves.png')}")
         plt.close()
 
     # Evaluate on test data
     test_clf_loss, test_clf_acc = evaluate_classifier(model_contrast, classifier, standard_test_loader, device)
     print(f"Contrastive Test Classifier Loss={test_clf_loss:.4f}, Test Accuracy={test_clf_acc*100:.2f}%")
+    # Write test results to file
+    with open(f'{args.save_path}/contrastive_test_classifier_results.txt', 'w') as f:
+        f.write(f"Test Classifier Loss: {test_clf_loss:.4f}\n")
+        f.write(f"Test Accuracy: {test_clf_acc*100:.2f}%\n")
 
     # Generate t-SNE visualization
     print("Generating t-SNE plots for Contrastively-Trained Encoder...")
-    plot_tsne(model_contrast.encode, standard_test_loader, device, image_tsne_path='tsne_img_contrastive.png', latent_tsne_path='tsne_latent_contrastive.png')
+    plot_tsne(model_contrast.encode, standard_test_loader, device, image_tsne_path=f"{args.save_path}/tsne_img_contrastive.png", latent_tsne_path=f"{args.save_path}/tsne_latent_contrastive.png")
 
 if __name__ == "__main__":
     main()
