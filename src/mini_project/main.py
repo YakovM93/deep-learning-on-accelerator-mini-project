@@ -26,7 +26,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=0, type=int, help='Seed for reproducibility')
     parser.add_argument('--data-path', default="./data", type=str, help='Path to dataset')
-    parser.add_argument('--save-path', default='./trained-models', type=str, help='Path to save the trained models')
+    parser.add_argument('--save-path', default='./trained-models/', type=str, help='Path to save the trained models')
     parser.add_argument('--batch-size', default=32, type=int, help='Batch size')
     parser.add_argument('--latent-dim', default=128, type=int, help='Latent dimension')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
@@ -212,7 +212,7 @@ def visualize_reconstructions(model, test_loader, device, num_examples=10):
     print(f"Saved reconstruction visualization to {os.path.abspath('reconstructions.png')}")
     plt.close()
 
-def linear_interpolation(model, dataloader, device, steps=10, n_image_pairs=1, save_path=None):
+def linear_interpolation(model, dataloader, device, steps, n_image_pairs, save_path):
     """
     Perform linear interpolation between pairs of images in the latent space.
 
@@ -287,15 +287,14 @@ def linear_interpolation(model, dataloader, device, steps=10, n_image_pairs=1, s
             axes[i+1].axis("off")
 
     plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Saved reconstruction visualization to {os.path.abspath(save_path)}")
-    plt.show()
+    plt.savefig(save_path)
+    print(f"Saved reconstruction visualization to {os.path.abspath(save_path)}")
 
 
 
 def main():
     args = get_args()
+    os.makedirs(args.save_path, exist_ok=True)
     #debug
     if args.mnist:
         print("MNIST")
@@ -360,32 +359,99 @@ def main():
         else:
             autoencoder = ConvAutoencoderCIFAR(latent_dim=args.latent_dim).to(device)
 
+        ## PHASE 1: Training Autoencoder (Self-Supervised)
         optimizer_ae, scheduler_ae = create_optimizer_scheduler(autoencoder.parameters(), args.lr, args.optimizer, T_max=args.epochs_ae)
         print("Training Autoencoder (Self-Supervised)...")
+
+        # Initialize lists to store losses
+        train_losses = []
+        val_losses = []
+
         for epoch in range(args.epochs_ae):
             train_loss = train_autoencoder(autoencoder, train_loader, optimizer_ae, device, scheduler_ae)
             val_loss = evaluate_autoencoder(autoencoder, val_loader, device)
             print(f"[AE Epoch {epoch+1}/{args.epochs_ae}] Train MAE={train_loss:.4f} | Val MAE={val_loss:.4f}")
 
+            # Store losses
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+
+        # Plot training curves
+        plt.figure(figsize=(10,6))
+        plt.plot(range(1, args.epochs_ae + 1), train_losses, label='Train Loss')
+        plt.plot(range(1, args.epochs_ae + 1), val_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss (MAE)')
+        plt.title('Training and Validation Loss Over Time')
+        plt.legend()
+        plt.grid(True)
+        # DEBUG Add this line to check if data is present
+        print(f"Training losses: {train_losses}")
+        print(f"Validation losses: {val_losses}")
+
+        plt.savefig(f"{args.save_path}/training_curves.png")
+        print(f"saved losstraining curves of autoencoder (Phase 1) to {os.path.abspath(args.save_path)}/training_curves.png")
+        plt.close()
+
         test_mae = evaluate_autoencoder(autoencoder, test_loader, device)
         print(f"Test Reconstruction MAE: {test_mae:.4f}")
 
         # Save the trained autoencoder model
-
         autoencoder.save_model(f"{args.save_path}/autoencoder.pth")
 
 
-        # Train Classifier on Frozen Encoder
+        ## Phase 2: Train Classifier on Frozen Encoder
         for param in autoencoder.parameters():
             param.requires_grad = False
         classifier = LatentClassifier(latent_dim=args.latent_dim, num_classes=10).to(device)
 
         optimizer_clf, scheduler_clf = create_optimizer_scheduler(classifier.parameters(), args.lr, args.optimizer, T_max=args.epochs_clf)
         print("Training Classifier on Frozen Encoder...")
+
+        # Initialize lists to store metrics
+        train_losses = []
+        train_accuracies = []
+        val_losses = []
+        val_accuracies = []
+
         for epoch in range(args.epochs_clf):
             train_clf_loss = train_classifier(autoencoder, classifier, train_loader, optimizer_clf, device, scheduler_clf)
+            _, train_clf_acc = evaluate_classifier(autoencoder, classifier, train_loader, device)
             val_clf_loss, val_clf_acc = evaluate_classifier(autoencoder, classifier, val_loader, device)
+
+            # Store metrics
+            train_losses.append(train_clf_loss)
+            train_accuracies.append(train_clf_acc)
+            val_losses.append(val_clf_loss)
+            val_accuracies.append(val_clf_acc)
+
             print(f"[CLF Epoch {epoch+1}/{args.epochs_clf}] Train Loss={train_clf_loss:.4f} | Val Loss={val_clf_loss:.4f}, Acc={val_clf_acc*100:.2f}%")
+
+        # Plot losses
+        plt.figure(figsize=(10,6))
+        plt.plot(range(1, args.epochs_clf + 1), train_losses, label='Train Loss')
+        plt.plot(range(1, args.epochs_clf + 1), val_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training and Validation Loss Over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f"{args.save_path}/classifier_loss.png")
+        print(f"saved classifier loss curves of autoencoder (Phase 2) to {os.path.abspath(args.save_path)}/classifier_loss.png")
+        plt.close()
+
+        # Plot accuracies
+        plt.figure(figsize=(10,6))
+        plt.plot(range(1, args.epochs_clf + 1), [acc * 100 for acc in train_accuracies], label='Train Accuracy')
+        plt.plot(range(1, args.epochs_clf + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy (%)')
+        plt.title('Training and Validation Accuracy Over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f"{args.save_path}/classifier_accuracy.png")
+        print(f"saved classifier accuracy curves of autoencoder (Phase 2) to {os.path.abspath(args.save_path)}/classifier_accuracy.png")
+        plt.close()
 
         test_clf_loss, test_clf_acc = evaluate_classifier(autoencoder, classifier, test_loader, device)
         print(f"Test Classifier Loss={test_clf_loss:.4f}, Test Accuracy={test_clf_acc*100:.2f}%")
@@ -397,7 +463,7 @@ def main():
         print("Visualizing Reconstructions...")
         visualize_reconstructions(autoencoder, test_loader, device)
         print("Performing Linear Interpolation on two images...")
-        linear_interpolation(autoencoder, test_loader, device, steps=10)
+        linear_interpolation(autoencoder, test_loader, device, steps=10, n_image_pairs=1, save_path=f"{args.save_path}/interpolation.png")
 
         print("Generating t-SNE plots for Self-Supervised Model...")
         plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path='tsne_img_selfsup.png', latent_tsne_path='tsne_latent_selfsup.png')
@@ -411,10 +477,46 @@ def main():
 
         optimizer_cg, scheduler_cg = create_optimizer_scheduler(model_cg.parameters(), args.lr, args.optimizer, T_max=args.epochs_cg)
         print("Training Classification-Guided Model...")
+
+        # Initialize lists to store metrics
+        train_losses = []
+        val_losses = []
+        val_accuracies = []
+
         for epoch in range(args.epochs_cg):
             train_loss = train_classification_guided(model_cg, train_loader, optimizer_cg, device, scheduler_cg)
             val_loss, val_acc = evaluate_classification_guided(model_cg, val_loader, device)
             print(f"[Epoch {epoch+1}/{args.epochs_cg}] Train Loss={train_loss:.4f} | Val Loss={val_loss:.4f}, Val Acc={val_acc*100:.2f}%")
+
+            # Store metrics
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            val_accuracies.append(val_acc)
+
+        # Plot training curves
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15,5))
+
+        # Plot losses
+        ax1.plot(range(1, args.epochs_cg + 1), train_losses, label='Train Loss')
+        ax1.plot(range(1, args.epochs_cg + 1), val_losses, label='Validation Loss')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.set_title('Training and Validation Loss Over Time')
+        ax1.legend()
+        ax1.grid(True)
+
+        # Plot accuracy
+        ax2.plot(range(1, args.epochs_cg + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy (%)')
+        ax2.set_title('Validation Accuracy Over Time')
+        ax2.legend()
+        ax2.grid(True)
+
+        plt.tight_layout()
+        plt.savefig(f"{args.save_path}/classification_guided_training_curves.png")
+        print(f"saved classification-guided training curves to {os.path.abspath(args.save_path)}/classification_guided_training_curves.png")
+        plt.close()
 
         test_loss, test_acc = evaluate_classification_guided(model_cg, test_loader, device)
         print(f"Test Loss={test_loss:.4f}, Test Accuracy={test_acc*100:.2f}%")
@@ -427,6 +529,8 @@ def main():
             return model_cg.encode(x)
         print("Generating t-SNE plots for Classification-Guided Model...")
         plot_tsne(encode_fn, test_loader, device, image_tsne_path='tsne_img_cg.png', latent_tsne_path='tsne_latent_cg.png')
+
+    ## Evaluation only (No Training)
     elif args.mode == 'evaluation_ae':
         if not args.pretrained_model:
             raise ValueError("Pretrained model path is required for evaluation.")
@@ -440,7 +544,7 @@ def main():
         print("Visualizing Reconstructions...")
         visualize_reconstructions(autoencoder, test_loader, device)
         print("Performing Linear Interpolation on two images...")
-        linear_interpolation(autoencoder, test_loader, device, steps=10)
+        linear_interpolation(autoencoder, test_loader, device, steps=10, n_image_pairs=1, save_path=f"{args.save_path}/interpolation.png")
 
         # print("Generating t-SNE plots for Self-Supervised Model...")
         # plot_tsne(autoencoder.encode, test_loader, device, image_tsne_path='tsne_img_selfsup.png', latent_tsne_path='tsne_latent_selfsup.png')

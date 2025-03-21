@@ -175,8 +175,8 @@ class ConvEncoderClassifierMNIST(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(True),
             nn.Flatten(),
-            # shape after that ~ (64, 3, 3) => 64*3*3 = 576, adapt if needed
-            nn.Linear(576, latent_dim)
+            # Correct dimension: 64*4*4 = 1024
+            nn.Linear(1024, latent_dim)
         )
 
         self.dropout = nn.Dropout(p=0.3)
@@ -188,12 +188,8 @@ class ConvEncoderClassifierMNIST(nn.Module):
 
     def forward(self, x):
         #debug
-        print("x.shape:", x.shape)
         x = self.initial_conv(x)
-        print("x.shape after initial_conv:", x.shape)
-        print("encoder:", self.encoder)
         z = self.encoder(x)
-        print("z.shape:", z.shape)
         z = self.dropout(z)
         logits = self.classifier(z)
         return logits
