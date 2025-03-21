@@ -177,9 +177,15 @@ def main():
     print("Training Encoder with Contrastive Loss...")
 
     # Contrastive training loop
+    # Initialize lists to store metrics
+    train_losses = []
+    val_losses = []
+
     for epoch in range(args.epochs_contrastive):
         total_loss = 0.0
         model_contrast.train()
+        correct_train = 0
+        total_train = 0
 
         for batch_idx, batch in enumerate(train_loader):
             # Extract images and labels
@@ -210,11 +216,6 @@ def main():
                 view1 = view1[:min_size]
                 view2 = view2[:min_size]
 
-            # Print shapes for debugging first epoch
-            if epoch == 0 and batch_idx == 0:
-                print(f"View1 shape: {view1.shape}")
-                print(f"View2 shape: {view2.shape}")
-
             # Process views through encoder
             optimizer_contrast.zero_grad()
             z1 = model_contrast.encode(view1)
@@ -227,17 +228,20 @@ def main():
             loss.backward()
             optimizer_contrast.step()
 
-            # Update total loss
+            # Update total loss and accuracy metrics
             total_loss += loss.item() * view1.size(0)
+            total_train += view1.size(0)
 
         if scheduler_contrast is not None:
             scheduler_contrast.step()
 
-        avg_train_loss = total_loss / len(train_loader.dataset)
+        avg_train_loss = total_loss / total_train
 
         # Validation
         model_contrast.eval()
         total_val_loss = 0.0
+        correct_val = 0
+        total_val = 0
 
         with torch.no_grad():
             for batch in val_loader:
@@ -269,9 +273,33 @@ def main():
 
                 loss = nt_xent_loss(z, temperature=0.5)
                 total_val_loss += loss.item() * view1.size(0)
+                total_val += view1.size(0)
 
-        avg_val_loss = total_val_loss / len(val_loader.dataset)
+        avg_val_loss = total_val_loss / total_val
+
+        # Store metrics
+        train_losses.append(avg_train_loss)
+        val_losses.append(avg_val_loss)
+
         print(f"[Contrastive Epoch {epoch+1}/{args.epochs_contrastive}] Train Loss={avg_train_loss:.4f} | Val Loss={avg_val_loss:.4f}")
+
+        # Plot training curves
+        plt.figure(figsize=(12,5))
+
+        # Plot losses
+        plt.plot(range(1, epoch + 2), train_losses, label='Train Loss')
+        plt.plot(range(1, epoch + 2), val_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Contrastive Learning Training and Validation Loss')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('contrastive_learning_losses_curves.png')
+        plt.close()
+
+
 
     # Test contrastive loss
     total_test_loss = 0.0
@@ -320,11 +348,52 @@ def main():
     optimizer_clf, scheduler_clf = create_optimizer_scheduler(classifier.parameters(), args.lr, args.optimizer, T_max=args.epochs_clf)
     print("Training Classifier on Frozen Contrastive Encoder...")
 
+    # Initialize lists to store metrics
+    train_clf_losses = []
+    val_clf_losses = []
+    train_clf_accs = []
+    val_clf_accs = []
+
     # Train classifier using standard data loaders
     for epoch in range(args.epochs_clf):
         train_clf_loss = train_classifier(model_contrast, classifier, standard_train_loader, optimizer_clf, device, scheduler_clf)
         val_clf_loss, val_clf_acc = evaluate_classifier(model_contrast, classifier, standard_val_loader, device)
+        _, train_clf_acc = evaluate_classifier(model_contrast, classifier, standard_train_loader, device)
+
+        # Store metrics
+        train_clf_losses.append(train_clf_loss)
+        val_clf_losses.append(val_clf_loss)
+        train_clf_accs.append(train_clf_acc)
+        val_clf_accs.append(val_clf_acc)
+
         print(f"[Contrastive CLF Epoch {epoch+1}/{args.epochs_clf}] Train Loss={train_clf_loss:.4f} | Val Loss={val_clf_loss:.4f}, Acc={val_clf_acc*100:.2f}%")
+
+        # Plot training curves
+        plt.figure(figsize=(12,5))
+
+        # Plot losses
+        plt.subplot(1,2,1)
+        plt.plot(range(1, epoch + 2), train_clf_losses, label='Train Loss')
+        plt.plot(range(1, epoch + 2), val_clf_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Classifier Training and Validation Loss')
+        plt.legend()
+        plt.grid(True)
+
+        # Plot accuracies
+        plt.subplot(1,2,2)
+        plt.plot(range(1, epoch + 2), train_clf_accs, label='Train Accuracy')
+        plt.plot(range(1, epoch + 2), val_clf_accs, label='Validation Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.title('Classifier Training and Validation Accuracy')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('contastive_learing_classifier_training_curves.png')
+        plt.close()
 
     # Evaluate on test data
     test_clf_loss, test_clf_acc = evaluate_classifier(model_contrast, classifier, standard_test_loader, device)
