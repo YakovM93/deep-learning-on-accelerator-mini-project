@@ -239,8 +239,8 @@ def main():
 
         # Plot training curves
         plt.figure(figsize=(10,6))
-        plt.plot(range(1, args.epochs_ae + 1), train_losses, label='Train Loss')
-        plt.plot(range(1, args.epochs_ae + 1), val_losses, label='Validation Loss')
+        plt.plot(range(1, len(train_losses) + 1), train_losses, label='Train Loss')
+        plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
         plt.xlabel('Epoch')
         plt.ylabel('Loss (MAE)')
         plt.title('Training and Validation Loss Over Time')
@@ -291,8 +291,9 @@ def main():
 
         # Plot losses
         plt.figure(figsize=(10,6))
-        plt.plot(range(1, args.epochs_clf + 1), train_losses, label='Train Loss')
-        plt.plot(range(1, args.epochs_clf + 1), val_losses, label='Validation Loss')
+        print(f"Plotting {len(train_losses)} train loss points and {len(val_losses)} validation loss points ")
+        plt.plot(range(1, len(train_losses) + 1), train_losses, label='Train Loss')
+        plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Training and Validation Loss Over Time')
@@ -304,8 +305,8 @@ def main():
 
         # Plot accuracies
         plt.figure(figsize=(10,6))
-        plt.plot(range(1, args.epochs_clf + 1), [acc * 100 for acc in train_accuracies], label='Train Accuracy')
-        plt.plot(range(1, args.epochs_clf + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
+        plt.plot(range(1, len(train_accuracies) + 1), [acc * 100 for acc in train_accuracies], label='Train Accuracy')
+        plt.plot(range(1, len(val_accuracies) + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
         plt.xlabel('Epoch')
         plt.ylabel('Accuracy (%)')
         plt.title('Training and Validation Accuracy Over Time')
@@ -364,8 +365,8 @@ def main():
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15,5))
 
         # Plot losses
-        ax1.plot(range(1, args.epochs_cg + 1), train_losses, label='Train Loss')
-        ax1.plot(range(1, args.epochs_cg + 1), val_losses, label='Validation Loss')
+        ax1.plot(range(1, len(train_losses) + 1), train_losses, label='Train Loss')
+        ax1.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
         ax1.set_xlabel('Epoch')
         ax1.set_ylabel('Loss')
         ax1.set_title('Training and Validation Loss Over Time')
@@ -373,7 +374,7 @@ def main():
         ax1.grid(True)
 
         # Plot accuracy
-        ax2.plot(range(1, args.epochs_cg + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
+        ax2.plot(range(1, len(val_accuracies) + 1), [acc * 100 for acc in val_accuracies], label='Validation Accuracy')
         ax2.set_xlabel('Epoch')
         ax2.set_ylabel('Accuracy (%)')
         ax2.set_title('Validation Accuracy Over Time')

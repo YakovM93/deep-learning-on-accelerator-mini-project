@@ -285,22 +285,23 @@ def main():
 
         print(f"[Contrastive Epoch {epoch+1}/{args.epochs_contrastive}] Train Loss={avg_train_loss:.4f} | Val Loss={avg_val_loss:.4f}")
 
-        # Plot training curves
-        plt.figure(figsize=(12,5))
+    # Plot training curves
+    plt.figure(figsize=(12,5))
 
-        # Plot losses
-        plt.plot(range(1, epoch + 2), train_losses, label='Train Loss')
-        plt.plot(range(1, epoch + 2), val_losses, label='Validation Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.title('Contrastive Learning Training and Validation Loss')
-        plt.legend()
-        plt.grid(True)
+    # Plot losses
+    print(f"Plotting {len(train_losses)} and {len(val_losses)} validation losses points")
+    plt.plot(range(1, len(train_losses)+1), train_losses, label='Train Loss')
+    plt.plot(range(1, len(val_losses)+1), val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Contrastive Learning Training and Validation Loss')
+    plt.legend()
+    plt.grid(True)
 
-        plt.tight_layout()
-        plt.savefig(f'{args.save_path}/contrastive_learning_losses_curves.png')
-        print(f"saved Contrastive Learning Losses Curves in {os.path.abspath(f'{args.save_path}/contrastive_learning_losses_curves.png')}")
-        plt.close()
+    plt.tight_layout()
+    plt.savefig(f'{args.save_path}/contrastive_learning_losses_curves.png')
+    print(f"saved Contrastive Learning Losses Curves in {os.path.abspath(f'{args.save_path}/contrastive_learning_losses_curves.png')}")
+    plt.close()
 
 
 
@@ -374,33 +375,34 @@ def main():
 
         print(f"[Contrastive CLF Epoch {epoch+1}/{args.epochs_clf}] Train Loss={train_clf_loss:.4f} | Val Loss={val_clf_loss:.4f}, Acc={val_clf_acc*100:.2f}%")
 
-        # Plot training curves
-        plt.figure(figsize=(12,5))
+    # Plot training curves
+    plt.figure(figsize=(12,5))
+    print(f"Plotting {len(train_clf_losses)} and {len(val_clf_losses)} validation losses points")
 
-        # Plot losses
-        plt.subplot(1,2,1)
-        plt.plot(range(1, epoch + 2), train_clf_losses, label='Train Loss')
-        plt.plot(range(1, epoch + 2), val_clf_losses, label='Validation Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.title('Classifier Training and Validation Loss')
-        plt.legend()
-        plt.grid(True)
+    # Plot losses
+    plt.subplot(1,2,1)
+    plt.plot(range(1, len(train_clf_losses)+1), train_clf_losses, label='Train Loss')
+    plt.plot(range(1, len(val_clf_losses)+1), val_clf_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Classifier Training and Validation Loss')
+    plt.legend()
+    plt.grid(True)
 
-        # Plot accuracies
-        plt.subplot(1,2,2)
-        plt.plot(range(1, epoch + 2), train_clf_accs, label='Train Accuracy')
-        plt.plot(range(1, epoch + 2), val_clf_accs, label='Validation Accuracy')
-        plt.xlabel('Epoch')
-        plt.ylabel('Accuracy')
-        plt.title('Classifier Training and Validation Accuracy')
-        plt.legend()
-        plt.grid(True)
+    # Plot accuracies
+    plt.subplot(1,2,2)
+    plt.plot(range(1, len(train_clf_accs)+1), train_clf_accs, label='Train Accuracy')
+    plt.plot(range(1, len(val_clf_accs)+1), val_clf_accs, label='Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Classifier Training and Validation Accuracy')
+    plt.legend()
+    plt.grid(True)
 
-        plt.tight_layout()
-        plt.savefig(f'{args.save_path}/contastive_learing_classifier_training_curves.png')
-        print(f"saved Contrastive Learning Classifier Training Curves in {os.path.abspath(f'{args.save_path}/contastive_learing_classifier_training_curves.png')}")
-        plt.close()
+    plt.tight_layout()
+    plt.savefig(f'{args.save_path}/contastive_learing_classifier_training_curves.png')
+    print(f"saved Contrastive Learning Classifier Training Curves in {os.path.abspath(f'{args.save_path}/contastive_learing_classifier_training_curves.png')}")
+    plt.close()
 
     # Evaluate on test data
     test_clf_loss, test_clf_acc = evaluate_classifier(model_contrast, classifier, standard_test_loader, device)
