@@ -4,7 +4,6 @@ plots/
 References/
 checkpoints_*/*
 checkpoints_*/*/*
-Notebooks/
 pyrightconfig.json
 # Byte-compiled / optimized / DLL files
 __pycache__/

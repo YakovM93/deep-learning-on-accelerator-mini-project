@@ -15,8 +15,8 @@ if [[ "$@" == *"--test"* ]]; then
     EPOCHS_CL_CIFAR=1
     EPOCHS_CG_CIFAR=1
 else
-    EPOCHS_AE_MNIST=15      # Autoencoder Self Supervised       MNIST
-    EPOCHS_CL_MNIST=10      # Classifier with fromzen encoder   MNIST
+    EPOCHS_AE_MNIST=30      # Autoencoder Self Supervised       MNIST
+    EPOCHS_CL_MNIST=30     # Classifier with fromzen encoder   MNIST
     EPOCHS_CG_MNIST=30      # Joint Autoencoder and Classifier  MNIST
 
     EPOCHS_AE_CIFAR=50      # Autoencoder Self Supervised       CIFAR

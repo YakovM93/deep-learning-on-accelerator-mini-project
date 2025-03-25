@@ -181,10 +181,17 @@ class ConvEncoderClassifierMNIST(nn.Module):
 
         self.dropout = nn.Dropout(p=0.3)
         self.classifier = nn.Sequential(
-            nn.BatchNorm1d(latent_dim),
-            nn.ReLU(True),
-            nn.Linear(latent_dim, num_classes)
-        )
+                    nn.Linear(latent_dim, 1024),
+                    nn.BatchNorm1d(1024),
+                    nn.RReLU(0.07, 0.2, inplace=True),
+                    nn.Dropout(p=0.4),
+                    nn.Linear(1024, 128),
+                    nn.BatchNorm1d(128),
+                    nn.RReLU(0.07, 0.2, inplace=True),
+                    nn.Dropout(p=0.4),
+                    nn.Linear(128, num_classes)
+                    )
+
 
     def forward(self, x):
         #debug
@@ -230,10 +237,16 @@ class ConvEncoderClassifierCIFAR(nn.Module):
         )
         self.dropout = nn.Dropout(p=0.3)
         self.classifier = nn.Sequential(
-            nn.BatchNorm1d(latent_dim),
-            nn.GELU(),
-            nn.Linear(latent_dim, num_classes)
-        )
+                    nn.Linear(latent_dim, 1024),
+                    nn.BatchNorm1d(1024),
+                    nn.RReLU(0.07, 0.2, inplace=True),
+                    nn.Dropout(p=0.4),
+                    nn.Linear(1024, 128),
+                    nn.BatchNorm1d(128),
+                    nn.RReLU(0.07, 0.2, inplace=True),
+                    nn.Dropout(p=0.4),
+                    nn.Linear(128, num_classes)
+                    )
 
     def forward(self, x):
         x = self.initial_conv(x)
@@ -317,30 +330,6 @@ class ContrastiveEncoderCIFAR(nn.Module):
 
     def forward(self, x):
         return self.encode(x)
-
-    def save_model(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load_model(self, path):
-        self.load_state_dict(torch.load(path))
-
-class LatentClassifier(nn.Module):
-    def __init__(self, latent_dim=128, num_classes=10):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(latent_dim, 1024),
-            nn.BatchNorm1d(1024),
-            nn.RReLU(0.07, 0.2, inplace=True),
-            nn.Dropout(p=0.4),
-            nn.Linear(1024, 128),
-            nn.BatchNorm1d(128),
-            nn.RReLU(0.07, 0.2, inplace=True),
-            nn.Dropout(p=0.4),
-            nn.Linear(128, num_classes)
-            )
-
-    def forward(self, z):
-        return self.fc(z)
 
     def save_model(self, path):
         torch.save(self.state_dict(), path)
