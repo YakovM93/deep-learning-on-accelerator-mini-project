@@ -34,6 +34,38 @@ def nt_xent_loss(z, temperature=0.5):
     loss = -torch.log(torch.exp(positives / temperature) / denom)
     return loss.mean()
 
+# Function to calculate reconstruction loss (MAE)
+def reconstruction_loss(x, x_hat):
+    return torch.mean(torch.abs(x - x_hat))
+
+# Function to evaluate autoencoder reconstruction quality
+def evaluate_autoencoder_reconstruction(model, dataloader, device):
+    model.eval()
+    total_loss = 0.0
+    total_samples = 0
+
+    with torch.no_grad():
+        for batch in dataloader:
+            if isinstance(batch, list) and isinstance(batch[0], tuple):
+                # This is a batch from identity_collate
+                images = torch.stack([item[0] for item in batch]).to(device)
+            else:
+                # This is a standard batch (images, labels)
+                images, _ = batch
+                images = images.to(device)
+
+            # Get reconstructions
+            z = model.encode(images)
+            reconstructions = model.decode(z)
+
+            # Calculate reconstruction loss
+            loss = reconstruction_loss(images, reconstructions)
+
+            total_loss += loss.item() * images.size(0)
+            total_samples += images.size(0)
+
+    return total_loss / total_samples
+
 class TwoCropsTransform:
     def __init__(self, transform):
         self.transform = transform
@@ -182,9 +214,12 @@ def main():
     # Initialize lists to store metrics
     train_losses = []
     val_losses = []
+    train_recon_losses = []  # New - track reconstruction losses
+    val_recon_losses = []    # New - track reconstruction losses
 
     for epoch in range(args.epochs_contrastive):
         total_loss = 0.0
+        total_recon_loss = 0.0  # New - for tracking reconstruction error
         model_contrast.train()
         correct_train = 0
         total_train = 0
@@ -234,14 +269,23 @@ def main():
             total_loss += loss.item() * view1.size(0)
             total_train += view1.size(0)
 
+            # Measure reconstruction loss (without using it for training)
+            with torch.no_grad():
+                # Get reconstructions for view1
+                reconstructions = model_contrast.decode(z1)
+                recon_loss = reconstruction_loss(view1, reconstructions)
+                total_recon_loss += recon_loss.item() * view1.size(0)
+
         if scheduler_contrast is not None:
             scheduler_contrast.step()
 
         avg_train_loss = total_loss / total_train
+        avg_train_recon_loss = total_recon_loss / total_train  # New
 
         # Validation
         model_contrast.eval()
         total_val_loss = 0.0
+        total_val_recon_loss = 0.0  # New
         correct_val = 0
         total_val = 0
 
@@ -277,13 +321,21 @@ def main():
                 total_val_loss += loss.item() * view1.size(0)
                 total_val += view1.size(0)
 
+                # Calculate reconstruction loss
+                reconstructions = model_contrast.decode(z1)
+                recon_loss = reconstruction_loss(view1, reconstructions)
+                total_val_recon_loss += recon_loss.item() * view1.size(0)
+
         avg_val_loss = total_val_loss / total_val
+        avg_val_recon_loss = total_val_recon_loss / total_val  # New
 
         # Store metrics
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)
+        train_recon_losses.append(avg_train_recon_loss)  # New
+        val_recon_losses.append(avg_val_recon_loss)      # New
 
-        print(f"[Contrastive Epoch {epoch+1}/{args.epochs_contrastive}] Train Loss={avg_train_loss:.4f} | Val Loss={avg_val_loss:.4f}")
+        print(f"[Contrastive Epoch {epoch+1}/{args.epochs_contrastive}] Train Loss={avg_train_loss:.4f} | Val Loss={avg_val_loss:.4f} | Train Recon MAE={avg_train_recon_loss:.4f} | Val Recon MAE={avg_val_recon_loss:.4f}")
 
     # Plot training curves
     plt.figure(figsize=(12,5))
@@ -303,10 +355,23 @@ def main():
     print(f"saved Contrastive Learning Losses Curves in {os.path.abspath(f'{args.save_path}/contrastive_learning_losses_curves.png')}")
     plt.close()
 
-
+    # New - Plot reconstruction MAE
+    plt.figure(figsize=(12,5))
+    plt.plot(range(1, len(train_recon_losses)+1), train_recon_losses, label='Train Reconstruction MAE')
+    plt.plot(range(1, len(val_recon_losses)+1), val_recon_losses, label='Validation Reconstruction MAE')
+    plt.xlabel('Epoch')
+    plt.ylabel('MAE')
+    plt.title('Contrastive Learning Reconstruction Error (MAE)')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'{args.save_path}/contrastive_reconstruction_mae_curves.png')
+    print(f"saved Contrastive Learning Reconstruction MAE Curves in {os.path.abspath(f'{args.save_path}/contrastive_reconstruction_mae_curves.png')}")
+    plt.close()
 
     # Test contrastive loss
     total_test_loss = 0.0
+    total_test_recon_loss = 0.0  # New
     model_contrast.eval()
     with torch.no_grad():
         for images, _ in test_loader:
@@ -321,11 +386,26 @@ def main():
             loss = nt_xent_loss(z, temperature=0.5)
             total_test_loss += loss.item() * batch_size
 
+            # Calculate reconstruction loss
+            reconstructions = model_contrast.decode(z1)
+            recon_loss = reconstruction_loss(images, reconstructions)
+            total_test_recon_loss += recon_loss.item() * batch_size
+
     avg_test_loss = total_test_loss / len(test_loader.dataset)
+    avg_test_recon_loss = total_test_recon_loss / len(test_loader.dataset)  # New
     print(f"Test Contrastive Loss: {avg_test_loss:.4f}")
+    print(f"Test Reconstruction MAE: {avg_test_recon_loss:.4f}")  # New
+
     # Write test results to file
     with open(f'{args.save_path}/contrastive_test_results.txt', 'w') as f:
         f.write(f"Test Contrastive Loss: {avg_test_loss:.4f}\n")
+        f.write(f"Test Reconstruction MAE: {avg_test_recon_loss:.4f}\n")  # New
+
+    # Evaluate autoencoder reconstruction on test set
+    test_recon_mae = evaluate_autoencoder_reconstruction(model_contrast, test_loader, device)
+    print(f"Test Reconstruction MAE (comprehensive): {test_recon_mae:.4f}")
+    with open(f'{args.save_path}/contrastive_test_results.txt', 'a') as f:
+        f.write(f"Test Reconstruction MAE (comprehensive): {test_recon_mae:.4f}\n")
 
     # Create new standard data loaders for classifier training
     print("Creating new standard data loaders for classifier training...")

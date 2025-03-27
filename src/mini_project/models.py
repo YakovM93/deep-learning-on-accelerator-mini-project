@@ -289,8 +289,34 @@ class ContrastiveEncoderMNIST(nn.Module):
             nn.Linear(64 * 4 * 4, latent_dim)
         )
 
+        self.decoder_input = nn.Linear(latent_dim, 64 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.1, inplace=True),
+
+            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(0.1, inplace=True),
+
+            # Modified final layer to ensure 28×28 output
+            nn.ConvTranspose2d(16, 1, kernel_size=4, stride=2, padding=1),  # Changed kernel_size to 4
+            nn.Sigmoid()
+        )
+        self.dropout = nn.Dropout(p=0.2)
+
     def encode(self, x):
         return self.encoder(x)
+
+    def decode(self, z):
+        x = self.decoder_input(z)
+        x = x.view(-1, 64, 4, 4)
+        x = self.dropout(x)
+        x = self.decoder(x)
+        # Ensure exactly 28×28 output by cropping if necessary
+        if x.size(-1) != 28:
+            x = x[:, :, :28, :28]
+        return x
 
     def forward(self, x):
         return self.encode(x)
@@ -325,8 +351,31 @@ class ContrastiveEncoderCIFAR(nn.Module):
             nn.Linear(128 * 4 * 4, latent_dim)
         )
 
+        self.decoder_input = nn.Linear(latent_dim, 128 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.GELU(),
+
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(32),
+            nn.GELU(),
+
+            # For symmetry with the new encoder:
+            nn.ConvTranspose2d(32, 3, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid()
+        )
+        self.dropout = nn.Dropout(p=0.2)  # optional dropout
+
     def encode(self, x):
         return self.encoder(x)
+
+    def decode(self, z):
+        x = self.decoder_input(z)
+        x = x.view(-1, 128, 4, 4)
+        x = self.dropout(x)  # dropout
+        x = self.decoder(x)
+        return x
 
     def forward(self, x):
         return self.encode(x)
