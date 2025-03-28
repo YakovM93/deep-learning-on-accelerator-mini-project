@@ -6,13 +6,6 @@ Submitted by:
 |Student 1|  Oz Diamond | 315099077 | oz.diamond@campus.technion.ac.il |
 |Student 2| Yakov Mishayev| 309645737 | yakov-m@campus.technion.ac.il |
 
-## Project Structure
-
-- `src/mini_project/main.py`: Implementation of self-supervised autoencoder (1.2.1) and classification-guided training (1.2.2)
-- `src/mini_project/main_contrastive.py`: Implementation of contrastive learning approach (1.2.3)
-- `src/mini_project/models.py`: Model architectures for different training approaches
-- `src/mini_project/utils.py`: Utility functions for visualization and evaluation
-- `run.sh`: Batch script to run all experiments
 
 ## Installation
 
@@ -20,96 +13,111 @@ Set up the environment using the provided `environment.yml` file:
 
 ```bash
 conda env create -f environment.yml
-conda activate aes
+conda activate mini_project
 ```
 
 ## Usage
-### Option 1: Run All Experiments with the Batch Script
+From the root directory of the project, run the following commands:
 
-The `run.sh` script will run all the experiments with predefined parameters:
+### Basic Usage
+
+
+To run all experiments (all modes on both datasets with the same run parameters (batch size, epoch numbers) used in the report:
 
 ```bash
-# Run all experiments with full epochs
-bash run.sh
-
-# Run a quick test with minimal epochs to check functionality
-bash run.sh --test
+python src/mini_project/main.py --mode all
 ```
 
-results will be save in `./results`
-### Option 2: Individual Experiments
-
-#### 1.2.1 Self-Supervised Autoencoder (AE)
-
-Train an autoencoder in a self-supervised manner and then train a classifier on the frozen encoder:
+For a quick test with reduced epochs:
 
 ```bash
-# For MNIST
-python src/mini_project/main.py --save-path ./results/MNIST/AE_CL --mnist --mode self_supervised --epochs-ae 30 --epochs-clf 30
-
-# For CIFAR-10
-python src/mini_project/main.py --save-path ./results/CIFAR/AE_CL --mode self_supervised --epochs-ae 50 --epochs-clf 180
+python src/mini_project/main.py --mode all-test
 ```
-
-#### 1.2.2 Classification-Guided Training (CG)
-
-Train an encoder and classifier jointly:
+Run a single experiment:
 
 ```bash
-# For MNIST
-python src/mini_project/main.py --save-path ./results/MNIST/CG --mnist --mode classification_guided --epochs-cg 30
+# Self-supervised learning on MNIST
+python src/mini_project/main.py --mode self_supervised --mnist
 
-# For CIFAR-10
-python src/mini_project/main.py --save-path ./results/CIFAR/CG --mode classification_guided --epochs-cg 60
-```
+# Classification-guided learning on CIFAR-10
+python src/mini_project/main.py --mode classification_guided
 
-#### 1.2.3 Contrastive Learning
-
-Train an encoder using contrastive learning and then train a classifier on the frozen encoder:
-
-```bash
-# For MNIST
-python src/mini_project/main_contrastive.py --save-path ./results/MNIST/CONTRASTIVE --mnist --epochs-contrastive 30 --epochs-clf 30
-
-# For CIFAR-10
-python src/mini_project/main_contrastive.py --save-path ./results/CIFAR/CONTRASTIVE --epochs-contrastive 50 --epochs-clf 180
+# Contrastive learning on MNIST
+python src/mini_project/main.py --mode contrastive --mnist
 ```
 
 
 
-## Command Line Arguments
 
-### Common Arguments
+### Configuration Options
 
-- `--seed`: Random seed for reproducibility (default: 0)
-- `--data-path`: Path to dataset directory (default: ./data)
-- `--save-path`: Path to save trained models and results
-- `--batch-size`: Batch size for training
-- `--latent-dim`: Dimension of latent space (default: 128)
-- `--lr`: Learning rate (default: 1e-3)
-- `--mnist`: Use MNIST dataset (if not specified, CIFAR-10 is used)
-- `--device`: Device to use (default: 'cuda' if available, otherwise 'cpu')
-- `--optimizer`: Optimizer type (default: 'adamw', options: 'adam', 'adamw', 'sgd', 'rmsprop')
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--mode` | Training paradigm (`self_supervised`, `classification_guided`, `contrastive`, `all`, `all-test`) | `self_supervised` |
+| `--mnist` | Use MNIST dataset (otherwise CIFAR-10) | `False` |
+| `--data-path` | Path to dataset | `./data` |
+| `--save-path` | Path to save models and results | `./trained-models/` |
+| `--batch-size` | Batch size | `32` |
+| `--latent-dim` | Latent dimension size | `128` |
+| `--lr` | Learning rate | `0.001` |
+| `--epochs-ae` | Epochs for autoencoder training | `35` |
+| `--epochs-clf` | Epochs for classifier training | `15` |
+| `--epochs-cg` | Epochs for classification-guided training | `20` |
+| `--epochs-contrastive` | Epochs for contrastive learning | `60` |
+| `--optimizer` | Optimizer (`adam`, `adamw`, `sgd`, `rmsprop`) | `adamw` |
+| `--device` | Computing device | `cuda` if available, else `cpu` |
+| `--seed` | Random seed for reproducibility | `0` |
 
-### main.py Specific Arguments
+## Training Paradigms
 
-- `--mode`: Training mode ('self_supervised' for 1.2.1 or 'classification_guided' for 1.2.2)
-- `--epochs-ae`: Number of epochs for autoencoder pretraining (default: 35)
-- `--epochs-clf`: Number of epochs for classifier training (default: 15)
-- `--epochs-cg`: Number of epochs for classification guided training (default: 20)
+### 1. Self-Supervised Learning (AE + Classifier)
 
-### main_contrastive.py Specific Arguments
+This two-phase approach:
+1. First trains an autoencoder in an unsupervised manner to learn representations
+2. Then freezes the encoder and trains a classifier on top of it
 
-- `--epochs-contrastive`: Number of epochs for contrastive pretraining (default: 60)
-- `--epochs-clf`: Number of epochs for classifier training after contrastive pretraining (default: 180)
+```bash
+python src/mini_project/main.py --mode self_supervised --mnist
+```
 
-## Output
+### 2. Classification-Guided Learning
 
-Each experiment will create:
-- Training and validation loss curves
-- t-SNE visualizations of the latent space
-- Reconstruction visualizations (for self-supervised and contrastive approaches)
-- Latent space interpolations (for self-supervised approach)
-- Test metrics in a text file
+End-to-end supervised training where representations are learned directly from the classification task:
 
-Results are saved in the directory specified by `--save-path`.
+```bash
+python src/mini_project/main.py --mode classification_guided
+```
+
+### 3. Contrastive Learning
+
+Learns representations by contrasting positive pairs against negative pairs, followed by classifier training:
+
+```bash
+python src/mini_project/main.py --mode contrastive --mnist
+```
+
+## Output and Results
+
+The script produces:
+
+- **Trained Models**: Saved encoder, decoder, and classifier models
+- **Loss Curves**: Training and validation loss plots
+- **Accuracy Plots**: Classification accuracy progression
+- **t-SNE Visualizations**: For both image space and latent space
+- **Reconstructions**: Visual comparison of original vs. reconstructed images
+- **Interpolations**: Latent space interpolation between samples
+- **Results File**: Text file with final performance metrics
+
+Results are organized as follows:
+
+```
+results/
+├── MNIST/
+│   ├── AE_CL/            (Self-Supervised)
+│   ├── CG/               (Classification-Guided)
+│   └── CONTRASTIVE/      (Contrastive Learning)
+└── CIFAR/
+    ├── AE_CL/            (Self-Supervised)
+    ├── CG/               (Classification-Guided)
+    └── CONTRASTIVE/      (Contrastive Learning)
+```
