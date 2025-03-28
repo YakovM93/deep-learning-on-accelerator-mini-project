@@ -88,7 +88,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=0, type=int, help='Seed for reproducibility')
     parser.add_argument('--data-path', default="./data", type=str, help='Path to dataset')
-    parser.add_argument('--batch-size', default=24, type=int, help='Batch size')
+    parser.add_argument('--batch-size', default=32, type=int, help='Batch size')
     parser.add_argument('--latent-dim', default=128, type=int, help='Latent dimension')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning rate')
     parser.add_argument('--epochs-clf', default=180, type=int, help='Number of epochs for classifier training')
